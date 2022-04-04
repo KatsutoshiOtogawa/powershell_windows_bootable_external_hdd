@@ -10,34 +10,36 @@ Clear-Disk $DiskNum
 
 # disk partition type 決定
 Initialize-Disk $DiskNum 
+$efi = "{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}"
+$preserve = "{e3c9e316-0b5c-4db8-817d-f92df00215ae}"
+$recovery = "{de94bba4-06d1-4d40-a16a-bfd50179d6ac}"
 
-New-Partition -DiskNumber $DiskNum -Size 500MB -GptType "{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}" -AssignDriveLetter | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "SYSTEM" -Force
-$BootDriveLetter
+$BootDriveLetter = (New-Partition -DiskNumber $DiskNum -Size 500MB -GptType $efi -AssignDriveLetter | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "SYSTEM" | Select-Object -ExpandProperty DriveLetter)
+
 # 予約領域 (パーティションは勝手にされる。)
-New-Partition -DiskNumber $DiskNum -Size 16MB -GptType "{e3c9e316-0b5c-4db8-817d-f92df00215ae}"
+New-Partition -DiskNumber $DiskNum -Size 16MB -GptType $preserve
+
 # 回復パーティション
-New-Partition -DiskNumber $DiskNum -Size 500MB -GptType "{de94bba4-06d1-4d40-a16a-bfd50179d6ac}" | Format-Volume -FileSystem NTFS -NewFileSystemLabel "Recovery patition"
+New-Partition -DiskNumber $DiskNum -Size 500MB -GptType $recovery | Format-Volume -FileSystem NTFS -NewFileSystemLabel "Recovery patition"
 
 # Root filesystem.
-New-Partition -DiskNumber $DiskNum  -GptType -UseMaximumSize -AssignDriveLetter | Format-Volume -FileSystem NTFS -NewFileSystemLabel "Windows" 
-$RootDriveLetter
+$RootDriveLetter = (New-Partition -DiskNumber $DiskNum -UseMaximumSize -AssignDriveLetter | Format-Volume -FileSystem NTFS -NewFileSystemLabel "Windows")
 
 # windows iso fileをマウントしてやる。
-Mount-DiskImage $windowsIsoPath  -pathtrhe | Set-Variable MountDriveLetter
+Mount-DiskImage $windowsIsoPath  -PassThru | Set-Variable MountDriveLetter
 
 # mount 先のパスを取得
 
 # image info image indexを調べる
-Get-WindowsImage -ImagePath $MountDriveLetter:\sources\install.wim
+Get-WindowsImage -ImagePath "${MountDriveLetter}:\sources\install.wim"
 # tempfileに置く。
 $tempfile
 
-# input from external
 $IndexNum
-
-Expand-WindowsImage -ImagePath $MountDriveLetter:\sources\install.wim -Index $IndexNum -ApplyPath "$RootDriveLetter:\"
+# input from external
+Expand-WindowsImage -ImagePath ${MountDriveLetter}:\sources\install.wim -Index $IndexNum -ApplyPath ${RootDriveLetter}:\
 
 # set up for booting partition. 
-$RootDriveLetter:\Windows\System32\bcdboot $RootDriveLetter:\Windows /s $BootDriveLetter: /f UEFI
+${RootDriveLetter}:\Windows\System32\bcdboot ${RootDriveLetter}:\Windows /s ${BootDriveLetter}: /f UEFI
 
 DisMount-DiskImage $windowsIsoPath
