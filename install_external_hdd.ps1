@@ -40,6 +40,7 @@ $IndexNum
 Expand-WindowsImage -ImagePath ${MountDriveLetter}:\sources\install.wim -Index $IndexNum -ApplyPath ${RootDriveLetter}:\
 
 # set up for booting partition. 
-${RootDriveLetter}:\Windows\System32\bcdboot ${RootDriveLetter}:\Windows /s ${BootDriveLetter}: /f UEFI
+# cmdのコマンドを呼び出すときはInvoke-Expression使わないと書きづらい。
+Invoke-expression "${RootDriveLetter}:\Windows\System32\bcdboot.exe ${RootDriveLetter}:\Windows /s ${BootDriveLetter}: /f UEFI" -Whatif
 
 DisMount-DiskImage $windowsIsoPath
