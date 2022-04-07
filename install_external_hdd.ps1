@@ -4,19 +4,29 @@
 
 function set-windows_format {
 
-    Set-Variable -Name efi -Value "{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}" -Option Constant
-    Set-Variable -Name preseve -Value "{e3c9e316-0b5c-4db8-817d-f92df00215ae}" -Option Constant
-    Set-Variable -Name recovery -Value "{de94bba4-06d1-4d40-a16a-bfd50179d6ac}" -Option Constant
+    Set-Variable ErrorActionPreference -Scope local -Value "Stop"
+    # debugオプションのときにつける。
+    # version指定も
+    # Set-StrictMode -Version 7.2
+
+    if ($PSVersionTable.PSVersion.Major -lt 7 -or $PSVersionTable.OS -notmatch "Windows") {
+
+        Write-Error -Category ResourceUnavailable -Message "required PSversion grater than 7 and OS is Windows"
+    }
+
+    Set-Variable -Name efi -Scope local -Value "{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}" -Option Constant
+    Set-Variable -Name preseve -Scope local -Value "{e3c9e316-0b5c-4db8-817d-f92df00215ae}" -Option Constant
+    Set-Variable -Name recovery -Scope local -Value "{de94bba4-06d1-4d40-a16a-bfd50179d6ac}" -Option Constant
 
     # ディスク確認
-    Get-Disk | Set-Variable disk_list
+    Get-Disk | Set-Variable disk_list -Scope local
 
     # ディスク選択
-    $Disk
+    New-Variable Disk -Scope local
     while ($true) {
         try {
             Write-Output $disk_list
-            read-host "Select index for iniliaze disk installing windows?" | Set-Variable Disknum
+            read-host "Select index for iniliaze disk installing windows?" | Set-Variable DiskNum -Scope local
             # ディスク存在確認なかったらループ
             Get-disk $DiskNum | Set-Variable Disk
             break;
@@ -33,7 +43,7 @@ function set-windows_format {
             Clear-Disk -Confirm:$false -RemoveData -PassThru |
             Initialize-Disk
     }catch{
-
+        Write-Host "Cannot Format Disk"
     }
 
     try {
@@ -43,7 +53,7 @@ function set-windows_format {
             New-Partition -Size 500MB -GptType $efi -AssignDriveLetter |
             Format-Volume -FileSystem FAT32 -NewFileSystemLabel "SYSTEM" |
             Select-Object -ExpandProperty DriveLetter |
-            Set-Variable BootDriveLetter
+            Set-Variable BootDriveLetter -Scope local -Option Constant
 
         # 予約領域 (パーティションは勝手にされる。)
         Write-Output $Disk |
@@ -55,10 +65,12 @@ function set-windows_format {
             Format-Volume -FileSystem NTFS -NewFileSystemLabel "Recovery patition"
 
         # Root filesystem.
+        # usemaximum sizeを -size 500MBみたいにかけるようにする。
+        # 連想配列で渡して、最後は
         Write-Output $Disk |
             New-Partition -UseMaximumSize -AssignDriveLetter |
             Format-Volume -FileSystem NTFS -NewFileSystemLabel "Windows" |
-            Set-Variable RootDriveLetter
+            Set-Variable RootDriveLetter -Scope local -Option Constant
 
         # dual boot 以上の場合
         #
@@ -70,37 +82,127 @@ function set-windows_format {
     }
 }
 
+function copy_windows_image {
 
-try {
+    # 取り出す適菜名前にする。
+    Set-Variable ErrorActionPreference -Scope local -Value "Stop"
 
-    $windowsIsoPath = C:\windows.iso
-    # windows iso fileをマウントしてやる。
-    $MountDriveLetter = Mount-DiskImage (Resolve-Path $windowsIsoPath) | Get-Volume | Select-Object -ExpandProperty DriveLetter
-    # image info image indexを調べる
-    Get-WindowsImage -ImagePath "${MountDriveLetter}:\sources\install.wim" | Tee-Object -Variable windows_list
+    if ($PSVersionTable.PSVersion.Major -lt 7 -or $PSVersionTable.OS -notmatch "Windows") {
 
-    while ($true){
-
-        $indexNum = read-host "Select index for windows image index"
-
-        # 
-        Write-Output $windows_list | Where-Object{ $_.ImageIndex -eq $IndexNum}
+        Write-Error -Category ResourceUnavailable -Message "required PSversion grater than 7 and OS is Windows"
     }
 
+    Set-Variable -Name windowsIsoPath -Scope local -Value "C:\windows.iso" -Option Constant
+    Set-Variable -Name destination -Scope local -Value "C:\Users\Administrator\" -Option Constant
 
-    # input from external
-    Expand-WindowsImage -ImagePath ${MountDriveLetter}:\sources\install.wim -Index $IndexNum -ApplyPath ${RootDriveLetter}:\
+    try {
 
-    # set up for booting partition. 
-    # cmdのコマンドを呼び出すときはInvoke-Expression使わないと書きづらい。
-    Write-Host "${RootDriveLetter}:\Windows\System32\bcdboot.exe ${RootDriveLetter}:\Windows /s ${BootDriveLetter}: /f UEFI"
+        # windows iso fileをマウントしてやる。
+        Resolve-Path $windowsIsoPath |
+        Mount-DiskImage |
+            Get-Volume |
+            Select-Object -ExpandProperty DriveLetter |
+            Set-Variable MountDriveLetter -Scope local -Option Constant
 
-    $age = read-host " :[Y|n]"
+        Copy-Item "${MountDriveLetter}:\sources\install.wim" -Destination $destination
+    } finally {
 
-    Invoke-expression "${RootDriveLetter}:\Windows\System32\bcdboot.exe ${RootDriveLetter}:\Windows /s ${BootDriveLetter}: /f UEFI"
-}finally{
-
-    # マウント解除
-    # アンマウント済みでもエラーにならないのでとりあえず四読
-    DisMount-DiskImage (Resolve-Path $windowsIsoPath) | Out-Null
+       # マウント解除
+       # アンマウント済みでもエラーにならないのでとりあえず四読
+       Resolve-Path $windowsIsoPath |
+       DisMount-DiskImage | Out-Null
+    }
 }
+
+function set-windows_Image {
+
+    # 取り出す適菜名前にする。
+    Set-Variable ErrorActionPreference -Scope local -Value "Stop"
+
+    if ($PSVersionTable.PSVersion.Major -lt 7 -or $PSVersionTable.OS -notmatch "Windows") {
+
+        Write-Error -Category ResourceUnavailable -Message "required PSversion grater than 7 and OS is Windows"
+    }
+    Set-Variable -Name windowsIsoPath -Scope local -Value "C:\windows.iso" -Option Constant
+    try {
+        # image info image indexを調べる
+        Get-WindowsImage -ImagePath "${MountDriveLetter}:\sources\install.wim" |
+            Set-Variable windows_list
+    } catch {
+
+        # try catchの入れ子になるので避けたい。
+        return;
+    }
+}
+
+# function set-windows_Image {
+#     Set-Variable ErrorActionPreference -Scope local -Value "Stop"
+
+#     if ($PSVersionTable.PSVersion.Major -lt 7 -or $PSVersionTable.OS -notmatch "Windows") {
+
+#         Write-Error -Category ResourceUnavailable -Message "required PSversion grater than 7 and OS is Windows"
+#     }
+
+#     Set-Variable -Name windowsIsoPath -Scope local -Value "C:\windows.iso" -Option Constant
+
+#     New-Variable MountDriveLetter -Scope local
+#     try {
+
+#         # windows iso fileをマウントしてやる。
+#         Resolve-Path $windowsIsoPath |
+#         Mount-DiskImage |
+#             Get-Volume |
+#             Select-Object -ExpandProperty DriveLetter |
+#             Set-Variable MountDriveLetter
+#         New-Variable windows_list -Scope local
+
+#         try {
+#             # image info image indexを調べる
+#             Get-WindowsImage -ImagePath "${MountDriveLetter}:\sources\install.wim" |
+#                 Set-Variable windows_list
+#         } catch {
+
+#             # try catchの入れ子になるので避けたい。
+#             return;
+#         }
+#         New-Variable select_windows -Scope local
+#         while ($true){
+
+#             try {
+#                 Write-Output $windows_list
+#                 Read-Host "Select index for windows image index?" |
+#                     Set-Variable indexNum -Scope local
+#                 # Image存在確認なかったらループ
+#                 Get-WindowsImage -ImagePath "${MountDriveLetter}:\sources\install.wim" -Index $indexNum |
+#                     Set-Variable select_windows
+#                 break;
+#             }catch{
+#                 Write-Host "Select Existing windows image."
+
+#             }
+#         }
+#         try {
+
+#             # input from external
+#             Write-Output $select_windows |
+#                 Expand-WindowsImage -ApplyPath "${RootDriveLetter}:\" 
+#             # Expand-WindowsImage -ImagePath ${MountDriveLetter}:\sources\install.wim -Index $IndexNum -ApplyPath ${RootDriveLetter}:\
+
+#             # set up for booting partition. 
+#             # Write-Host "${RootDriveLetter}:\Windows\System32\bcdboot.exe ${RootDriveLetter}:\Windows /s ${BootDriveLetter}: /f UEFI"
+
+#             Start-Process "${RootDriveLetter}:\Windows\System32\bcdboot.exe" `
+#                 -ArgumentList "${RootDriveLetter}:\Windows",/s,"${BootDriveLetter}:",/f,UEFI `
+#                 -Confirm 
+#             # Invoke-expression "${RootDriveLetter}:\Windows\System32\bcdboot.exe ${RootDriveLetter}:\Windows /s ${BootDriveLetter}: /f UEFI" 
+#         }catch{
+
+#         }
+#     } finally {
+
+#         # マウント解除
+#         # アンマウント済みでもエラーにならないのでとりあえず四読
+#         Resolve-Path $windowsIsoPath |
+#         DisMount-DiskImage | Out-Null
+#     }
+# }
