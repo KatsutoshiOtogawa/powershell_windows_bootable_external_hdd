@@ -1,18 +1,22 @@
 
-
-
-
 function set-windows_format {
-
+    #Requires -Version 7 -RunAsAdministrator
+    #Requires -Modules Storage
+    [CmdletBinding()]
+    param (
+        # UseMaximumSize
+        [Parameter(Mandatory = $False)]
+        [String]$UseSize = "-UseMaximumSize"
+    )
+    # -UseMaximumSizeか -Size か強制
+    Set-Variable -Name UseSize -Scope local -Value "-UseMaximumSize" -Option Constant
+    # -Size 500MB
     Set-Variable ErrorActionPreference -Scope local -Value "Stop"
+    # use debugging
+    # Set-StrictMode -Version 7.2
     # debugオプションのときにつける。
     # version指定も
     # Set-StrictMode -Version 7.2
-
-    if ($PSVersionTable.PSVersion.Major -lt 7 -or $PSVersionTable.OS -notmatch "Windows") {
-
-        Write-Error -Category ResourceUnavailable -Message "required PSversion grater than 7 and OS is Windows"
-    }
 
     Set-Variable -Name efi -Scope local -Value "{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}" -Option Constant
     Set-Variable -Name preseve -Scope local -Value "{e3c9e316-0b5c-4db8-817d-f92df00215ae}" -Option Constant
@@ -66,9 +70,9 @@ function set-windows_format {
 
         # Root filesystem.
         # usemaximum sizeを -size 500MBみたいにかけるようにする。
-        # 連想配列で渡して、最後は
+        # もっとパーティション分けたい場合は手動
         Write-Output $Disk |
-            New-Partition -UseMaximumSize -AssignDriveLetter |
+            New-Partition $UseSize -AssignDriveLetter |
             Format-Volume -FileSystem NTFS -NewFileSystemLabel "Windows" |
             Set-Variable RootDriveLetter -Scope local -Option Constant
 
@@ -77,20 +81,18 @@ function set-windows_format {
 
         # 連想配列で返す。
         return @{BootDriverLetter=$BootDriveLetter; RootDriveLetter= $RootDriveLetter }
-    } finally {
+    } catch {
 
     }
 }
 
 function copy_windows_image {
-
+    #Requires -Version 7 -RunAsAdministrator
+    #Requires -Modules Dism, Storage
     # 取り出す適菜名前にする。
     Set-Variable ErrorActionPreference -Scope local -Value "Stop"
-
-    if ($PSVersionTable.PSVersion.Major -lt 7 -or $PSVersionTable.OS -notmatch "Windows") {
-
-        Write-Error -Category ResourceUnavailable -Message "required PSversion grater than 7 and OS is Windows"
-    }
+    # use debugging
+    # Set-StrictMode -Version 7.2
 
     Set-Variable -Name windowsIsoPath -Scope local -Value "C:\windows.iso" -Option Constant
     Set-Variable -Name destination -Scope local -Value "C:\Users\Administrator\" -Option Constant
@@ -115,14 +117,13 @@ function copy_windows_image {
 }
 
 function set-windows_Image {
-
+    #Requires -Version 7 -RunAsAdministrator
+    #Requires -Modules Dism
     # 取り出す適菜名前にする。
     Set-Variable ErrorActionPreference -Scope local -Value "Stop"
+    # use debugging
+    # Set-StrictMode -Version 7.2
 
-    if ($PSVersionTable.PSVersion.Major -lt 7 -or $PSVersionTable.OS -notmatch "Windows") {
-
-        Write-Error -Category ResourceUnavailable -Message "required PSversion grater than 7 and OS is Windows"
-    }
     Set-Variable -Name image_path -Scope local -Value "C:\Users\Administrator\sources\install.wim" -Option Constant
     New-Variable windows_list -Scope local
     try {
@@ -142,7 +143,7 @@ function set-windows_Image {
             Read-Host "Select index for windows image index?" |
                 Set-Variable indexNum -Scope local
             # Image存在確認なかったらループ
-            Get-WindowsImage -ImagePath "${MountDriveLetter}:\sources\install.wim" -Index $indexNum |
+            Get-WindowsImage -ImagePath $image_path -Index $indexNum |
                 Set-Variable select_windows
             break;
         }catch{
