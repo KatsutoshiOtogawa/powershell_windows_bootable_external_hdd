@@ -123,15 +123,49 @@ function set-windows_Image {
 
         Write-Error -Category ResourceUnavailable -Message "required PSversion grater than 7 and OS is Windows"
     }
-    Set-Variable -Name windowsIsoPath -Scope local -Value "C:\windows.iso" -Option Constant
+    Set-Variable -Name image_path -Scope local -Value "C:\Users\Administrator\sources\install.wim" -Option Constant
+    New-Variable windows_list -Scope local
     try {
         # image info image indexを調べる
-        Get-WindowsImage -ImagePath "${MountDriveLetter}:\sources\install.wim" |
+        Get-WindowsImage -ImagePath $image_path |
             Set-Variable windows_list
     } catch {
 
-        # try catchの入れ子になるので避けたい。
+        # imageがなかったらここで終わる
         return;
+    }
+    New-Variable select_windows -Scope local
+    while ($true){
+
+        try {
+            Write-Output $windows_list
+            Read-Host "Select index for windows image index?" |
+                Set-Variable indexNum -Scope local
+            # Image存在確認なかったらループ
+            Get-WindowsImage -ImagePath "${MountDriveLetter}:\sources\install.wim" -Index $indexNum |
+                Set-Variable select_windows
+            break;
+        }catch{
+            Write-Host "Select Existing windows image."
+
+        }
+    }
+    try {
+
+        # input from external
+        Write-Output $select_windows |
+            Expand-WindowsImage -ApplyPath "${RootDriveLetter}:\" 
+        # Expand-WindowsImage -ImagePath ${MountDriveLetter}:\sources\install.wim -Index $IndexNum -ApplyPath ${RootDriveLetter}:\
+
+        # set up for booting partition. 
+        # Write-Host "${RootDriveLetter}:\Windows\System32\bcdboot.exe ${RootDriveLetter}:\Windows /s ${BootDriveLetter}: /f UEFI"
+
+        Start-Process "${RootDriveLetter}:\Windows\System32\bcdboot.exe" `
+            -ArgumentList "${RootDriveLetter}:\Windows",/s,"${BootDriveLetter}:",/f,UEFI `
+            -Confirm 
+        # Invoke-expression "${RootDriveLetter}:\Windows\System32\bcdboot.exe ${RootDriveLetter}:\Windows /s ${BootDriveLetter}: /f UEFI" 
+    }catch{
+
     }
 }
 
