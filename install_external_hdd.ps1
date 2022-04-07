@@ -12,14 +12,13 @@ function set-windows_format {
     Get-Disk | Set-Variable disk_list
 
     # ディスク選択
-    $DiskNum;
+    $Disk
     while ($true) {
         try {
             Write-Output $disk_list
             read-host "Select index for iniliaze disk installing windows?" | Set-Variable Disknum
             # ディスク存在確認なかったらループ
-            Get-disk $DiskNum | Out-Null
-
+            Get-disk $DiskNum | Set-Variable Disk
             break;
         }catch{
             Write-Host "Select Existing disk in system."
@@ -27,32 +26,37 @@ function set-windows_format {
         }
     }
     # ディスク初期化処理
-    while ($true) {
-        try {
-            Set-Disk -IsOffline $false
-            Clear-Disk $DiskNum -PassThru | Initialize-Disk
-            break;
-        }catch{
+    try {
+        # $offlineにしとく。しないとディスクを変更できない。
+        Write-Output $Disk | Set-Disk -IsOffline $false 
+        Write-Output $Disk |
+            Clear-Disk -Confirm:$false -RemoveData -PassThru |
+            Initialize-Disk
+    }catch{
 
-        }
     }
+
     try {
 
         # disk partition type 決定
-        New-Partition -DiskNumber $DiskNum -Size 500MB -GptType $efi -AssignDriveLetter |
+        Write-Output $Disk |
+            New-Partition -Size 500MB -GptType $efi -AssignDriveLetter |
             Format-Volume -FileSystem FAT32 -NewFileSystemLabel "SYSTEM" |
             Select-Object -ExpandProperty DriveLetter |
             Set-Variable BootDriveLetter
 
         # 予約領域 (パーティションは勝手にされる。)
-        New-Partition -DiskNumber $DiskNum -Size 16MB -GptType $preserve
+        Write-Output $Disk |
+            New-Partition -Size 16MB -GptType $preserve
 
         # 回復パーティション
-        New-Partition -DiskNumber $DiskNum -Size 500MB -GptType $recovery |
+        Write-Output $Disk |
+            New-Partition -Size 500MB -GptType $recovery |
             Format-Volume -FileSystem NTFS -NewFileSystemLabel "Recovery patition"
 
         # Root filesystem.
-        New-Partition -DiskNumber $DiskNum -UseMaximumSize -AssignDriveLetter |
+        Write-Output $Disk |
+            New-Partition -UseMaximumSize -AssignDriveLetter |
             Format-Volume -FileSystem NTFS -NewFileSystemLabel "Windows" |
             Set-Variable RootDriveLetter
 
