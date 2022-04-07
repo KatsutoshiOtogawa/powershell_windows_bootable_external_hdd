@@ -5,11 +5,20 @@ function set-windows_format {
     [CmdletBinding()]
     param (
         # UseMaximumSize
-        [Parameter(Mandatory = $False)]
-        [String]$UseSize = "-UseMaximumSize"
+        [Parameter(
+            Mandatory = $False
+            , HelpMessage = "Specifies the size of the partition to create. If not specified, then the units will default to Bytes . The acceptable value for this parameter is a positive number followed by the one of the following unit values: Bytes ,KB , MB , GB , or TB ."
+        )]
+        [UInt64]$Size,
+
+        [Parameter(
+            Mandatory = $False
+            ,HelpMessage = "Creates the largest possible partition on the specified disk."
+        )]
+        [Switch]$UseMaximumSize
     )
     # -UseMaximumSizeか -Size か強制
-    Set-Variable -Name UseSize -Scope local -Value "-UseMaximumSize" -Option Constant
+    # Set-Variable -Name UseSize -Scope local -Value "-UseMaximumSize" -Option Constant
     # -Size 500MB
     Set-Variable ErrorActionPreference -Scope local -Value "Stop"
     # use debugging
@@ -72,7 +81,7 @@ function set-windows_format {
         # usemaximum sizeを -size 500MBみたいにかけるようにする。
         # もっとパーティション分けたい場合は手動
         Write-Output $Disk |
-            New-Partition $UseSize -AssignDriveLetter |
+            New-Partition -Size $Size -UseMaximumSize $UseMaximumSize -AssignDriveLetter |
             Format-Volume -FileSystem NTFS -NewFileSystemLabel "Windows" |
             Set-Variable RootDriveLetter -Scope local -Option Constant
 
