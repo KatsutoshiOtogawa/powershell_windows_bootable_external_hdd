@@ -1,21 +1,21 @@
 
-function set-windows_format {
+function set-windows_multiboot_disk {
     #Requires -Version 7 -RunAsAdministrator
     #Requires -Modules Storage
     [CmdletBinding()]
     param (
         # UseMaximumSize
         [Parameter(
-            Mandatory = $False
+            Mandatory = $True
             , HelpMessage = "Specifies the size of the partition to create. If not specified, then the units will default to Bytes . The acceptable value for this parameter is a positive number followed by the one of the following unit values: Bytes ,KB , MB , GB , or TB ."
         )]
-        [UInt64]$Size = 0,
+        [UInt64[]]$Size,
 
         [Parameter(
             Mandatory = $False
-            ,HelpMessage = "Creates the largest possible partition on the specified disk."
+            ,HelpMessage = "Leave disk space."
         )]
-        [Switch]$UseMaximumSize,
+        [Switch]$LeaveCapacity,
 
         [Parameter(
             Mandatory = $False
@@ -24,17 +24,10 @@ function set-windows_format {
         
     )
     Set-Variable ErrorActionPreference -Scope local -Value "Stop"
-    # -UseMaximumSizeとSize両方を選んだ場合はUseMaximumSize優先
-    # -LeaveCapacity
-    # Useを配列にする?@(60GB,70GB,80GB,UseMaximum)
-    # もっとパーティション分けたい場合は手動
+    # 使い方の例
+    # set-windows_format -Size @(50GB,60GB,70GB) -LeaveCapacity -PassThru
 
-    if ($Size -eq 0 -and -not $UseMaximumSize) {
-        Write-Error -Message "You must specify a size by using either the Size or the UseMaximumSize parameter. You can specify only one of these parameters at a time." `
-                    -Category InvalidArgument
-    }
-
-    class aaa {
+    class DiskDriveLetter {
         [string] $BootDriverLetter
         [string[]] $WindowsDriveLetter
     }
@@ -85,21 +78,42 @@ function set-windows_format {
             Format-Volume -FileSystem NTFS -NewFileSystemLabel "Recovery patition" |
             Out-Null
 
-        # Windowsドライブ
-        Write-Output $Disk |
+        Write-Output $Size | 
             ForEach-Object {
-                if($UseMaximumSize){
-                    $_ | New-Partition -UseMaximumSize -AssignDriveLetter
-                }else{
-                    $_ | New-Partition -Size $Size -AssignDriveLetter
+                Write-Output $Disk | 
+                    New-Partition -Size $_ -AssignDriveLetter
+            } -End {
+                if(-not $LeaveCapacity){
+                    Write-Output $Disk | 
+                        New-Partition -UseMaximumSize -AssignDriveLetter
                 }
             } |
-            Format-Volume -FileSystem NTFS -NewFileSystemLabel "Windows" |
-            Select-Object -ExpandProperty DriveLetter |
+            ForEach-Object {
+                Write-Output $_ | 
+                    Format-Volume -FileSystem NTFS -NewFileSystemLabel "Windows" |
+                    Select-Object -ExpandProperty DriveLetter 
+            } |
             Set-Variable WindowsDriveLetter -Scope local -Option Constant
 
+        # Windowsドライブ
+        # Write-Output $Disk |
+        #     ForEach-Object {
+        #         if($UseMaximumSize){
+        #             $_ | New-Partition -UseMaximumSize -AssignDriveLetter
+        #         }else{
+        #             $_ | New-Partition -Size $Size -AssignDriveLetter
+        #         }
+        #     } -End {
+        #         if(-not $LeaveCapacity){
+        #             $_ | New-Partition -UseMaximumSize -AssignDriveLetter
+        #         }
+        #     }|
+        #     Format-Volume -FileSystem NTFS -NewFileSystemLabel "Windows" |
+        #     Select-Object -ExpandProperty DriveLetter |
+        #     Set-Variable WindowsDriveLetter -Scope local -Option Constant
+
             if ($PassThru) {
-                New-Object aaa -Property @{BootDriverLetter=$BootDriveLetter; WindowsDriveLetter= @($WindowsDriveLetter) }
+                New-Object DiskDriveLetter -Property @{BootDriverLetter=$BootDriveLetter; WindowsDriveLetter= $WindowsDriveLetter }
             }
     } catch {
         $error[0] | Write-Error
