@@ -1,53 +1,76 @@
+
 function set-windows_Image {
     #Requires -Version 7 -RunAsAdministrator
     #Requires -Modules Dism
+    [CmdletBinding()]
+    param (
+        # UseMaximumSize
+        [Parameter(
+            Mandatory = $True
+            , HelpMessage = "Specifies the size of the partition to create. If not specified, then the units will default to Bytes . The acceptable value for this parameter is a positive number followed by the one of the following unit values: Bytes ,KB , MB , GB , or TB ."
+        )]
+        [string]$image_path,
+
+        [Parameter(
+            Mandatory = $True
+            ,HelpMessage = "Leave disk space."
+        )]
+        [string]$BootDriveLetter,
+        [Parameter(
+            Mandatory = $True
+            ,HelpMessage = "Leave disk space."
+        )]
+        [string]$WindowsDriveLetter,
+
+        [Parameter(
+            Mandatory = $False
+        )]
+        [Switch]$PassThru
+        
+    )
     # 取り出す適菜名前にする。
     Set-Variable ErrorActionPreference -Scope local -Value "Stop"
-    # use debugging
-    # Set-StrictMode -Version 7.2
 
-    Set-Variable -Name image_path -Scope local -Value "C:\Users\Administrator\sources\install.wim" -Option Constant
+    # set-windows_Image -image_path C:\Users\Administrator\sources\install.wim -BootDriveLetter -WindowsDriveLetter
     New-Variable windows_list -Scope local
     try {
         # image info image indexを調べる
         Get-WindowsImage -ImagePath $image_path |
             Set-Variable windows_list
     } catch {
-
-        # imageがなかったらここで終わる
-        return;
+        $error[0] | Write-Error
     }
-    New-Variable select_windows -Scope local
+    New-Variable indexNum -Scope local
     while ($true){
 
         try {
-            Write-Output $windows_list
+            Write-Output $windows_list | Out-Host
             Read-Host "Select index for windows image index?" |
-                Set-Variable indexNum -Scope local
+                Set-Variable indexNum
             # Image存在確認なかったらループ
             Get-WindowsImage -ImagePath $image_path -Index $indexNum |
-                Set-Variable select_windows
+                Out-Null
             break;
         }catch{
-            Write-Host "Select Existing windows image."
 
+            $error[0] | Write-Error
         }
     }
     try {
-
         # input from external
-        Write-Output $select_windows |
-            Expand-WindowsImage -ApplyPath "${RootDriveLetter}:\" 
+        Expand-WindowsImage -ImagePath $image_path -Index $indexNum -ApplyPath "${WindowsDriveLetter}:\" 
         # Expand-WindowsImage -ImagePath ${MountDriveLetter}:\sources\install.wim -Index $IndexNum -ApplyPath ${RootDriveLetter}:\
 
         # set up for booting partition. 
         # Write-Host "${RootDriveLetter}:\Windows\System32\bcdboot.exe ${RootDriveLetter}:\Windows /s ${BootDriveLetter}: /f UEFI"
 
-        Start-Process "${RootDriveLetter}:\Windows\System32\bcdboot.exe" `
-            -ArgumentList "${RootDriveLetter}:\Windows",/s,"${BootDriveLetter}:",/f,UEFI `
-            -Confirm 
+        Start-Process "${WindowsDriveLetter}:\Windows\System32\bcdboot.exe" `
+            -ArgumentList "${WindowsDriveLetter}:\Windows",/s,"${BootDriveLetter}:",/f,UEFI `
+            -Confirm `
+            -Wait
         # Invoke-expression "${RootDriveLetter}:\Windows\System32\bcdboot.exe ${RootDriveLetter}:\Windows /s ${BootDriveLetter}: /f UEFI" 
     }catch{
 
+        $error[0] | Write-Error
     }
 }

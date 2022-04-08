@@ -47,8 +47,7 @@ function set-windows_multiboot_disk {
             Get-disk $DiskNum | Set-Variable Disk
             break;
         }catch{
-            Write-Host "Select Existing disk in system."
-
+            $error[0] | Write-Error
         }
     }
     # ディスク初期化処理
@@ -60,7 +59,7 @@ function set-windows_multiboot_disk {
             Clear-Disk -Confirm:$false -RemoveData -PassThru |
             Initialize-Disk
     }catch{
-        Write-Host "Cannot Format Disk"
+        $error[0] | Write-Error
     }
 
     try {
@@ -78,6 +77,7 @@ function set-windows_multiboot_disk {
             Format-Volume -FileSystem NTFS -NewFileSystemLabel "Recovery patition" |
             Out-Null
 
+        # Windowsドライブ
         Write-Output $Size | 
             ForEach-Object {
                 Write-Output $Disk | 
@@ -94,23 +94,6 @@ function set-windows_multiboot_disk {
                     Select-Object -ExpandProperty DriveLetter 
             } |
             Set-Variable WindowsDriveLetter -Scope local -Option Constant
-
-        # Windowsドライブ
-        # Write-Output $Disk |
-        #     ForEach-Object {
-        #         if($UseMaximumSize){
-        #             $_ | New-Partition -UseMaximumSize -AssignDriveLetter
-        #         }else{
-        #             $_ | New-Partition -Size $Size -AssignDriveLetter
-        #         }
-        #     } -End {
-        #         if(-not $LeaveCapacity){
-        #             $_ | New-Partition -UseMaximumSize -AssignDriveLetter
-        #         }
-        #     }|
-        #     Format-Volume -FileSystem NTFS -NewFileSystemLabel "Windows" |
-        #     Select-Object -ExpandProperty DriveLetter |
-        #     Set-Variable WindowsDriveLetter -Scope local -Option Constant
 
             if ($PassThru) {
                 New-Object DiskDriveLetter -Property @{BootDriverLetter=$BootDriveLetter; WindowsDriveLetter= $WindowsDriveLetter }

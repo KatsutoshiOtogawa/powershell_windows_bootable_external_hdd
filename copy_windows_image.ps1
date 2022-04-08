@@ -35,6 +35,8 @@ function copy_windows_image {
 
         Set-Variable wimPath -Scope local -Value "${MountDriveLetter}:\sources\install.wim" -Option Constant
         Copy-Item $wimPath -Destination $destination
+    } catch {
+        $error[0] | Write-Error
     } finally {
 
        # マウント解除
