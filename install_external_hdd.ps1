@@ -15,10 +15,18 @@ function set-windows_format {
             Mandatory = $False
             ,HelpMessage = "Creates the largest possible partition on the specified disk."
         )]
-        [Switch]$UseMaximumSize
+        [Switch]$UseMaximumSize,
+
+        [Parameter(
+            Mandatory = $False
+        )]
+        [Switch]$PassThru
+        
     )
     Set-Variable ErrorActionPreference -Scope local -Value "Stop"
     # -UseMaximumSizeとSize両方を選んだ場合はUseMaximumSize優先
+    # -LeaveCapacity
+    # Useを配列にする?@(60GB,70GB,80GB,UseMaximum)
     # もっとパーティション分けたい場合は手動
 
     if ($Size -eq 0 -and -not $UseMaximumSize) {
@@ -26,6 +34,10 @@ function set-windows_format {
                     -Category InvalidArgument
     }
 
+    class aaa {
+        [string] $BootDriverLetter
+        [string[]] $WindowsDriveLetter
+    }
     Set-Variable efi -Scope local -Value "{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}"
     Set-Variable recovery -Scope local -Value "{de94bba4-06d1-4d40-a16a-bfd50179d6ac}"
 
@@ -36,7 +48,7 @@ function set-windows_format {
     New-Variable Disk -Scope local
     while ($true) {
         try {
-            Write-Output $disk_list
+            Write-Output $disk_list | Out-Host
             read-host "Select index for iniliaze disk installing windows?" | Set-Variable DiskNum -Scope local
             # ディスク存在確認なかったらループ
             Get-disk $DiskNum | Set-Variable Disk
@@ -73,6 +85,7 @@ function set-windows_format {
             Format-Volume -FileSystem NTFS -NewFileSystemLabel "Recovery patition" |
             Out-Null
 
+        # Windowsドライブ
         Write-Output $Disk |
             ForEach-Object {
                 if($UseMaximumSize){
@@ -83,10 +96,11 @@ function set-windows_format {
             } |
             Format-Volume -FileSystem NTFS -NewFileSystemLabel "Windows" |
             Select-Object -ExpandProperty DriveLetter |
-            Set-Variable RootDriveLetter -Scope local -Option Constant
+            Set-Variable WindowsDriveLetter -Scope local -Option Constant
 
-        # 連想配列で返す。
-        return @{BootDriverLetter=$BootDriveLetter; RootDriveLetter= $RootDriveLetter }
+            if ($PassThru) {
+                New-Object aaa -Property @{BootDriverLetter=$BootDriveLetter; WindowsDriveLetter= @($WindowsDriveLetter) }
+            }
     } catch {
         $error[0] | Write-Error
 
