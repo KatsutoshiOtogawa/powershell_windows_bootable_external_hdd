@@ -9,26 +9,24 @@ function set-windows_format {
             Mandatory = $False
             , HelpMessage = "Specifies the size of the partition to create. If not specified, then the units will default to Bytes . The acceptable value for this parameter is a positive number followed by the one of the following unit values: Bytes ,KB , MB , GB , or TB ."
         )]
-        [UInt64]$Size,
+        [UInt64]$Size = 0,
 
         [Parameter(
-            Mandatory = $True
+            Mandatory = $False
             ,HelpMessage = "Creates the largest possible partition on the specified disk."
         )]
         [Switch]$UseMaximumSize
     )
-    # -UseMaximumSizeか -Size か強制
-    # Set-Variable -Name UseSize -Scope local -Value "-UseMaximumSize" -Option Constant
-    # -Size 500MB
     Set-Variable ErrorActionPreference -Scope local -Value "Stop"
-    # use debugging
-    # Set-StrictMode -Version 7.2
-    # debugオプションのときにつける。
-    # version指定も
-    # Set-StrictMode -Version 7.2
+    # -UseMaximumSizeとSize両方を選んだ場合はUseMaximumSize優先
+    # もっとパーティション分けたい場合は手動
+
+    if ($Size -eq 0 -and -not $UseMaximumSize) {
+        Write-Error -Message "You must specify a size by using either the Size or the UseMaximumSize parameter. You can specify only one of these parameters at a time." `
+                    -Category InvalidArgument
+    }
 
     Set-Variable efi -Scope local -Value "{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}"
-    # Set-Variable preserve -Scope local -Value "{e3c9e316-0b5c-4db8-817d-f92df00215ae}"
     Set-Variable recovery -Scope local -Value "{de94bba4-06d1-4d40-a16a-bfd50179d6ac}"
 
     # ディスク確認
@@ -50,7 +48,7 @@ function set-windows_format {
     }
     # ディスク初期化処理
     try {
-        # $offlineにしとく。しないとディスクを変更できない。
+        # onlineにしとく。しないとディスクを変更できない。
         Write-Output $Disk | Set-Disk -IsOffline $false 
         # Initializeでいい感じの予約領域のパーティションを作ってくれる。
         Write-Output $Disk |
@@ -62,32 +60,30 @@ function set-windows_format {
 
     try {
 
-        # disk partition type 決定
+        # system領域(Bootローダーをインストールする領域)
         Write-Output $Disk |
             New-Partition -Size 500MB -GptType $efi -AssignDriveLetter |
             Format-Volume -FileSystem FAT32 -NewFileSystemLabel "SYSTEM" |
             Select-Object -ExpandProperty DriveLetter |
             Set-Variable BootDriveLetter -Scope local -Option Constant
 
-        # 予約領域 (パーティションは勝手にされる。)
-        # Write-Output $Disk |
-        #     New-Partition -Size 16MB -GptType $preserve
-
         # 回復パーティション
         Write-Output $Disk |
             New-Partition -Size 500MB -GptType $recovery |
-            Format-Volume -FileSystem NTFS -NewFileSystemLabel "Recovery patition"
+            Format-Volume -FileSystem NTFS -NewFileSystemLabel "Recovery patition" |
+            Out-Null
 
-        # Root filesystem.
-        # usemaximum sizeを -size 500MBみたいにかけるようにする。
-        # もっとパーティション分けたい場合は手動
         Write-Output $Disk |
-            New-Partition -Size $Size -UseMaximumSize:$UseMaximumSize -AssignDriveLetter |
+            ForEach-Object {
+                if($UseMaximumSize){
+                    $_ | New-Partition -UseMaximumSize -AssignDriveLetter
+                }else{
+                    $_ | New-Partition -Size $Size -AssignDriveLetter
+                }
+            } |
             Format-Volume -FileSystem NTFS -NewFileSystemLabel "Windows" |
+            Select-Object -ExpandProperty DriveLetter |
             Set-Variable RootDriveLetter -Scope local -Option Constant
-
-        # dual boot 以上の場合
-        #
 
         # 連想配列で返す。
         return @{BootDriverLetter=$BootDriveLetter; RootDriveLetter= $RootDriveLetter }
