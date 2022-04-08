@@ -31,7 +31,6 @@ function set-windows_Image {
     # 取り出す適菜名前にする。
     Set-Variable ErrorActionPreference -Scope local -Value "Stop"
 
-    # set-windows_Image -image_path C:\Users\Administrator\sources\install.wim -BootDriveLetter -WindowsDriveLetter
     New-Variable windows_list -Scope local
     try {
         # image info image indexを調べる
@@ -59,16 +58,12 @@ function set-windows_Image {
     try {
         # input from external
         Expand-WindowsImage -ImagePath $image_path -Index $indexNum -ApplyPath "${WindowsDriveLetter}:\" 
-        # Expand-WindowsImage -ImagePath ${MountDriveLetter}:\sources\install.wim -Index $IndexNum -ApplyPath ${RootDriveLetter}:\
 
         # set up for booting partition. 
-        # Write-Host "${RootDriveLetter}:\Windows\System32\bcdboot.exe ${RootDriveLetter}:\Windows /s ${BootDriveLetter}: /f UEFI"
-
         Start-Process "${WindowsDriveLetter}:\Windows\System32\bcdboot.exe" `
             -ArgumentList "${WindowsDriveLetter}:\Windows",/s,"${BootDriveLetter}:",/f,UEFI `
             -Confirm `
             -Wait
-        # Invoke-expression "${RootDriveLetter}:\Windows\System32\bcdboot.exe ${RootDriveLetter}:\Windows /s ${BootDriveLetter}: /f UEFI" 
     }catch{
 
         $error[0] | Write-Error
