@@ -6,7 +6,7 @@ function set-windows_multiboot_disk {
     param (
         # UseMaximumSize
         [Parameter(
-            Mandatory = $True
+            Mandatory = $False
             , HelpMessage = "Specifies the size of the partition to create. If not specified, then the units will default to Bytes . The acceptable value for this parameter is a positive number followed by the one of the following unit values: Bytes ,KB , MB , GB , or TB ."
         )]
         [UInt64[]]$Size,
@@ -19,6 +19,11 @@ function set-windows_multiboot_disk {
 
         [Parameter(
             Mandatory = $False
+            ,HelpMessage = "パーティションがひとつのみの場合"
+        )]
+        [Switch]$UseSingle,
+        [Parameter(
+            Mandatory = $False
         )]
         [Switch]$PassThru
         
@@ -26,6 +31,15 @@ function set-windows_multiboot_disk {
     Set-Variable ErrorActionPreference -Scope local -Value "Stop"
     # 使い方の例
     # set-windows_format -Size @(50GB,60GB,70GB) -LeaveCapacity -PassThru
+    # set-windows -Size @(50GB) -Leavecapacity
+    # 一つのみ
+    # set-windows -UseSingle
+
+    if ($UseSingle -and ($LeaveCapacity -or (1 -le $Size.Count))) {
+        Write-Error "UseSingle at the same time"
+    }
+
+    # UseSingleかどうかでswitch分の法がいいかも。
 
     class DiskDriveLetter {
         [string] $BootDriverLetter
@@ -78,100 +92,41 @@ function set-windows_multiboot_disk {
             Out-Null
 
         # Windowsドライブ
-        Write-Output $Size | 
-            ForEach-Object {
-                Write-Output $Disk | 
-                    New-Partition -Size $_ -AssignDriveLetter
-            } -End {
-                if(-not $LeaveCapacity){
-                    Write-Output $Disk | 
-                        New-Partition -UseMaximumSize -AssignDriveLetter
-                }
-            } |
-            ForEach-Object {
-                Write-Output $_ | 
-                    Format-Volume -FileSystem NTFS -NewFileSystemLabel "Windows" |
-                    Select-Object -ExpandProperty DriveLetter 
-            } |
-            Set-Variable WindowsDriveLetter -Scope local -Option Constant
+        if ($UseSingle) {
 
-            if ($PassThru) {
-                New-Object DiskDriveLetter -Property @{BootDriverLetter=$BootDriveLetter; WindowsDriveLetter= $WindowsDriveLetter }
-            }
+            Write-Output $Disk | 
+                New-Partition -UseMaximumSize -AssignDriveLetter |
+                Format-Volume -FileSystem NTFS -NewFileSystemLabel "Windows" |
+                Select-Object -ExpandProperty DriveLetter |
+                Set-Variable SingleWindowsDriveLetter -Scope local -Option Constant
+
+            Set-Variable WindowsDriveLetter -Scope local -Value @($SingleWindowsDriveLetter) -Option Constant
+
+        } else {
+
+            Write-Output $Size | 
+                ForEach-Object {
+                    Write-Output $Disk | 
+                        New-Partition -Size $_ -AssignDriveLetter
+                } -End {
+                    if(-not $LeaveCapacity){
+                        Write-Output $Disk | 
+                            New-Partition -UseMaximumSize -AssignDriveLetter
+                    }
+                } |
+                ForEach-Object {
+                    Write-Output $_ | 
+                        Format-Volume -FileSystem NTFS -NewFileSystemLabel "Windows" |
+                        Select-Object -ExpandProperty DriveLetter 
+                } |
+                Set-Variable WindowsDriveLetter -Scope local -Option Constant
+        }
+
+        if ($PassThru) {
+            New-Object DiskDriveLetter -Property @{BootDriverLetter=$BootDriveLetter; WindowsDriveLetter= $WindowsDriveLetter }
+        }
     } catch {
         $error[0] | Write-Error
 
     }
 }
-
-# function set-windows_Image {
-#     Set-Variable ErrorActionPreference -Scope local -Value "Stop"
-
-#     if ($PSVersionTable.PSVersion.Major -lt 7 -or $PSVersionTable.OS -notmatch "Windows") {
-
-#         Write-Error -Category ResourceUnavailable -Message "required PSversion grater than 7 and OS is Windows"
-#     }
-
-#     Set-Variable -Name windowsIsoPath -Scope local -Value "C:\windows.iso" -Option Constant
-
-#     New-Variable MountDriveLetter -Scope local
-#     try {
-
-#         # windows iso fileをマウントしてやる。
-#         Resolve-Path $windowsIsoPath |
-#         Mount-DiskImage |
-#             Get-Volume |
-#             Select-Object -ExpandProperty DriveLetter |
-#             Set-Variable MountDriveLetter
-#         New-Variable windows_list -Scope local
-
-#         try {
-#             # image info image indexを調べる
-#             Get-WindowsImage -ImagePath "${MountDriveLetter}:\sources\install.wim" |
-#                 Set-Variable windows_list
-#         } catch {
-
-#             # try catchの入れ子になるので避けたい。
-#             return;
-#         }
-#         New-Variable select_windows -Scope local
-#         while ($true){
-
-#             try {
-#                 Write-Output $windows_list
-#                 Read-Host "Select index for windows image index?" |
-#                     Set-Variable indexNum -Scope local
-#                 # Image存在確認なかったらループ
-#                 Get-WindowsImage -ImagePath "${MountDriveLetter}:\sources\install.wim" -Index $indexNum |
-#                     Set-Variable select_windows
-#                 break;
-#             }catch{
-#                 Write-Host "Select Existing windows image."
-
-#             }
-#         }
-#         try {
-
-#             # input from external
-#             Write-Output $select_windows |
-#                 Expand-WindowsImage -ApplyPath "${RootDriveLetter}:\" 
-#             # Expand-WindowsImage -ImagePath ${MountDriveLetter}:\sources\install.wim -Index $IndexNum -ApplyPath ${RootDriveLetter}:\
-
-#             # set up for booting partition. 
-#             # Write-Host "${RootDriveLetter}:\Windows\System32\bcdboot.exe ${RootDriveLetter}:\Windows /s ${BootDriveLetter}: /f UEFI"
-
-#             Start-Process "${RootDriveLetter}:\Windows\System32\bcdboot.exe" `
-#                 -ArgumentList "${RootDriveLetter}:\Windows",/s,"${BootDriveLetter}:",/f,UEFI `
-#                 -Confirm 
-#             # Invoke-expression "${RootDriveLetter}:\Windows\System32\bcdboot.exe ${RootDriveLetter}:\Windows /s ${BootDriveLetter}: /f UEFI" 
-#         }catch{
-
-#         }
-#     } finally {
-
-#         # マウント解除
-#         # アンマウント済みでもエラーにならないのでとりあえず四読
-#         Resolve-Path $windowsIsoPath |
-#         DisMount-DiskImage | Out-Null
-#     }
-# }
