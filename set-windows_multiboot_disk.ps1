@@ -21,7 +21,7 @@ function set-windows_multiboot_disk {
             Mandatory = $False
             ,HelpMessage = "パーティションがひとつのみの場合"
         )]
-        [Switch]$UseSingle,
+        [Switch]$UseSingleMaximumSize,
         [Parameter(
             Mandatory = $False
         )]
@@ -32,14 +32,16 @@ function set-windows_multiboot_disk {
     # 使い方の例
     # set-windows_format -Size @(50GB,60GB,70GB) -LeaveCapacity -PassThru
     # set-windows -Size @(50GB) -Leavecapacity
-    # 一つのみ
-    # set-windows -UseSingle
+    # シングルブートのみでとりあえず空き領域全部使いたい場合
+    # set-windows -UseSingleMaximumSize
 
-    if ($UseSingle -and ($LeaveCapacity -or (1 -le $Size.Count))) {
-        Write-Error "UseSingle at the same time"
+    if ($UseSingleMaximumSize) {
+        if ($LeaveCapacity -or (1 -le $Size.Count)) {
+            Write-Error "UseSingle or at the same time"
+        }
+    } elseif (0 -eq $Size.Count -or $null -eq $Size){
+        Write-Error "Size flag assigned value"
     }
-
-    # UseSingleかどうかでswitch分の法がいいかも。
 
     class DiskDriveLetter {
         [string] $BootDriverLetter
@@ -92,7 +94,7 @@ function set-windows_multiboot_disk {
             Out-Null
 
         # Windowsドライブ
-        if ($UseSingle) {
+        if ($UseSingleMaximumSize) {
 
             Write-Output $Disk | 
                 New-Partition -UseMaximumSize -AssignDriveLetter |
