@@ -47,8 +47,8 @@ function set-windows_multiboot_disk {
         [string] $BootDriverLetter
         [string[]] $WindowsDriveLetter
     }
-    Set-Variable efi -Scope local -Value "{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}"
-    Set-Variable recovery -Scope local -Value "{de94bba4-06d1-4d40-a16a-bfd50179d6ac}"
+    Set-Variable efi -Scope local -Value "{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}" -Option Constant
+    Set-Variable recovery -Scope local -Value "{de94bba4-06d1-4d40-a16a-bfd50179d6ac}" -Option Constant
 
     # ディスク確認
     Get-Disk | Set-Variable disk_list -Scope local
